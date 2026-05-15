@@ -44,12 +44,20 @@ function logout() {
     localStorage.removeItem('user');
     document.getElementById('sidebar').classList.add('d-none');
     document.getElementById('login-page').style.display = 'flex';
+    const mc = document.getElementById('main-content');
+    mc.style.marginLeft = '0';
+    mc.style.alignItems = 'center';
+    mc.style.justifyContent = 'center';
     document.getElementById('page-content').innerHTML = '';
 }
 
 function showApp() {
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('sidebar').classList.remove('d-none');
+    const mc = document.getElementById('main-content');
+    mc.style.marginLeft = 'var(--sidebar-width)';
+    mc.style.alignItems = 'flex-start';
+    mc.style.justifyContent = 'flex-start';
     document.getElementById('sidebar-user').textContent = USER.full_name || USER.username;
     if (USER.role === 'admin') {
         document.getElementById('nav-users').classList.remove('d-none');
@@ -626,3 +634,15 @@ async function saveSettings() {
 // ── Init ────────────────────────────────────────────────────────────────────
 
 if (TOKEN && USER) { showApp(); }
+
+// ── Auto-login on page load ─────────────────────────────────────────────────
+(function() {
+    if (TOKEN && USER) {
+        // Verify token is still valid
+        api('/auth/me').then(() => {
+            showApp();
+        }).catch(() => {
+            logout();
+        });
+    }
+})();
