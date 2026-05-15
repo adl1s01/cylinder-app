@@ -46,12 +46,24 @@ def check_upcoming_inspections():
         if not settings_list:
             return
 
+        # Collect NotificationSettings to check per-user preferences
+        all_ns = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.telegram_bot_token.isnot(None),
+                NotificationSettings.telegram_chat_id.isnot(None),
+            )
+            .all()
+        )
+
         for check_date, label in check_dates:
+            # Range check: any cylinder due between today and check_date
             cylinders = (
                 db.query(Cylinder)
                 .filter(
-                    Cylinder.status == CylinderStatus.ACTIVE,
-                    Cylinder.next_inspection_date == check_date,
+                    Cylinder.status.in_([CylinderStatus.ACTIVE, CylinderStatus.INSPECTION]),
+                    Cylinder.next_inspection_date >= today,
+                    Cylinder.next_inspection_date <= check_date,
                 )
                 .all()
             )
@@ -66,7 +78,7 @@ def check_upcoming_inspections():
 
             message = "\n".join(lines)
 
-            for ns in settings_list:
+            for ns in all_ns:
                 try:
                     url = f"https://api.telegram.org/bot{ns.telegram_bot_token}/sendMessage"
                     requests.post(
@@ -79,7 +91,38 @@ def check_upcoming_inspections():
                         timeout=10,
                     )
                 except Exception:
-                    pass  # silently skip failed sends
+                    pass
+
+        # ── Overdue check ──
+        overdue = (
+            db.query(Cylinder)
+            .filter(
+                Cylinder.status.in_([CylinderStatus.ACTIVE, CylinderStatus.INSPECTION]),
+                Cylinder.next_inspection_date < today,
+            )
+            .all()
+        )
+        if overdue:
+            lines = ["⚠️ *ПРОСРОЧЕННЫЕ БАЛЛОНЫ*", ""]
+            for cyl in overdue:
+                lines.append(
+                    f"• Баллон №{cyl.number} (клеймо: {cyl.stamp or '—'}) — {cyl.next_inspection_date}"
+                )
+            message = "\n".join(lines)
+            for ns in all_ns:
+                try:
+                    url = f"https://api.telegram.org/bot{ns.telegram_bot_token}/sendMessage"
+                    requests.post(
+                        url,
+                        json={
+                            "chat_id": ns.telegram_chat_id,
+                            "text": message,
+                            "parse_mode": "Markdown",
+                        },
+                        timeout=10,
+                    )
+                except Exception:
+                    pass
     finally:
         db.close()
 

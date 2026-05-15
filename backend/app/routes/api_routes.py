@@ -2,11 +2,11 @@
 
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
 from app.database import get_db, SessionLocal
@@ -194,6 +194,7 @@ def list_cylinders(
     status: CylinderStatus | None = None,
     search: str | None = None,
     overdue: bool = False,
+    days: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -214,6 +215,13 @@ def list_cylinders(
         q = q.filter(
             Cylinder.next_inspection_date < date.today(),
             Cylinder.status == CylinderStatus.ACTIVE,
+        )
+    if days:
+        target = date.today() + timedelta(days=days)
+        q = q.filter(
+            Cylinder.next_inspection_date >= date.today(),
+            Cylinder.next_inspection_date <= target,
+            Cylinder.status.in_([CylinderStatus.ACTIVE, CylinderStatus.INSPECTION]),
         )
     return q.all()
 
@@ -302,13 +310,17 @@ def list_inspections(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    q = db.query(Inspection)
+    q = db.query(Inspection).options(joinedload(Inspection.cylinder))
     if cylinder_id:
         q = q.filter(Inspection.cylinder_id == cylinder_id)
     # Scope to user's fleet
     if user.role != UserRole.ADMIN and user.fleet_id:
         q = q.join(Cylinder).filter(Cylinder.fleet_id == user.fleet_id)
-    return q.order_by(Inspection.inspection_date.desc()).all()
+    results = q.order_by(Inspection.inspection_date.desc()).all()
+    # Attach cylinder_number for JSON serialization
+    for insp in results:
+        insp.cylinder_number = insp.cylinder.number if insp.cylinder else None
+    return results
 
 
 @router.post("/inspections")

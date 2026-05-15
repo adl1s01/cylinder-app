@@ -143,12 +143,12 @@ async function renderDashboard() {
     document.getElementById('page-content').innerHTML = `
     <h4>Панель управления</h4>
     <div class="row g-3 mt-2">
-      <div class="col-md-3"><div class="card card-stat"><div class="card-body"><small class="text-muted">Автопарки</small><h3>${data.total_fleets}</h3></div></div></div>
-      <div class="col-md-3"><div class="card card-stat"><div class="card-body"><small class="text-muted">Автобусы</small><h3>${data.total_buses}</h3></div></div></div>
-      <div class="col-md-3"><div class="card card-stat"><div class="card-body"><small class="text-muted">Баллоны</small><h3>${data.active_cylinders} / ${data.total_cylinders}</h3></div></div></div>
-      <div class="col-md-3"><div class="card card-stat danger"><div class="card-body"><small class="text-muted">Просрочены</small><h3>${data.overdue_inspections}</h3></div></div></div>
-      <div class="col-md-3"><div class="card card-stat warning"><div class="card-body"><small class="text-muted">Испытания (30 дн)</small><h3>${data.upcoming_30days}</h3></div></div></div>
-      <div class="col-md-3"><div class="card card-stat"><div class="card-body"><small class="text-muted">Мало на складе</small><h3>${data.low_stock_items}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat" style="cursor:pointer" onclick="navigate('fleets')"><div class="card-body"><small class="text-muted">Автопарки</small><h3>${data.total_fleets}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat" style="cursor:pointer" onclick="navigate('buses')"><div class="card-body"><small class="text-muted">Автобусы</small><h3>${data.total_buses}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat" style="cursor:pointer" onclick="navigate('cylinders')"><div class="card-body"><small class="text-muted">Баллоны</small><h3>${data.active_cylinders} / ${data.total_cylinders}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat danger" style="cursor:pointer" onclick="window._cylFilter='overdue';navigate('cylinders')"><div class="card-body"><small class="text-muted">Просрочены</small><h3>${data.overdue_inspections}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat warning" style="cursor:pointer" onclick="window._cylFilter='soon';navigate('cylinders')"><div class="card-body"><small class="text-muted">Испытания (30 дн)</small><h3>${data.upcoming_30days}</h3></div></div></div>
+      <div class="col-md-3"><div class="card card-stat" style="cursor:pointer" onclick="navigate('stock')"><div class="card-body"><small class="text-muted">Мало на складе</small><h3>${data.low_stock_items}</h3></div></div></div>
     </div>`;
 }
 
@@ -248,8 +248,12 @@ async function deleteBus(id) {
 // ── Cylinders ───────────────────────────────────────────────────────────────
 
 async function renderCylinders() {
+    // Dashboard filter support
+    let filterParam = '';
+    if (window._cylFilter === 'overdue') { filterParam = '?overdue=true'; window._cylFilter = null; }
+    else if (window._cylFilter === 'soon') { filterParam = '?days=30'; window._cylFilter = null; }
     const [cylinders, buses, fleets] = await Promise.all([
-        api('/cylinders'), api('/buses'), api('/fleets')]);
+        api('/cylinders' + filterParam), api('/buses'), api('/fleets')]);
     const fleetMap = Object.fromEntries(fleets.map(f => [f.id, f.name]));
     const busMap = Object.fromEntries(buses.map(b => [b.id, `${b.gosnomer}`]));
     const statusBadge = s => ({ active: 'success', in_stock: 'secondary', inspection: 'warning', rejected: 'danger', decommissioned: 'dark' }[s] || 'secondary');
@@ -405,10 +409,10 @@ async function deleteCylinder(id) {
 async function renderInspections() {
     const insp = await api('/inspections');
     const rows = insp.map(i => `
-        <tr><td>${i.inspection_date}</td><td>${i.inspection_type}</td><td><span class="badge bg-${i.result==='pass'?'success':i.result==='fail'?'danger':'warning'}">${i.result}</span></td><td>${i.inspector || ''}</td><td>${i.next_inspection_date || ''}</td><td>${i.notes || ''}</td></tr>`).join('');
+        <tr><td>${i.inspection_date}</td><td>${i.cylinder_number || '—'}</td><td>${i.inspection_type}</td><td><span class="badge bg-${i.result==='pass'?'success':i.result==='fail'?'danger':'warning'}">${i.result}</span></td><td>${i.inspector || ''}</td><td>${i.next_inspection_date || ''}</td><td>${i.notes || ''}</td></tr>`).join('');
     document.getElementById('page-content').innerHTML = `
     <div class="d-flex justify-content-between"><h4>Испытания</h4><button class="btn btn-primary" onclick="addInspection()"><i class="bi bi-plus-lg"></i> Добавить</button></div>
-    <table class="table table-hover mt-3"><thead><tr><th>Дата</th><th>Тип</th><th>Результат</th><th>Инспектор</th><th>След. исп.</th><th>Заметки</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="text-muted">Нет испытаний</td></tr>'}</tbody></table>`;
+    <table class="table table-hover mt-3"><thead><tr><th>Дата</th><th>Баллон</th><th>Тип</th><th>Результат</th><th>Инспектор</th><th>След. исп.</th><th>Заметки</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="text-muted">Нет испытаний</td></tr>'}</tbody></table>`;
 }
 
 async function addInspection() {

@@ -156,6 +156,12 @@ class Inspection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+    @property
+    def cylinder_number(self):
+        if hasattr(self, '_cylinder_number'):
+            return self._cylinder_number
+        return self.cylinder.number if self.cylinder else None
+
 class Repair(Base):
     __tablename__ = "repairs"
 
