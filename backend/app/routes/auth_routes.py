@@ -44,7 +44,7 @@ def login(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
-    token = create_token({"sub": user.id, "role": user.role.value})
+    token = create_token({"sub": str(user.id), "role": user.role.value})
     return {
         "access_token": token,
         "token_type": "bearer",
